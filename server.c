@@ -1,12 +1,8 @@
-// ******************************************************************
-// Socket template code source:
-// https://www.programminglogic.com/sockets-programming-example-in-c-server-converts-strings-to-uppercase/
-// *******************************************************************
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netinet/in.h>
 #include <pthread.h>
-#include <signal.h>  // pthread.kill()
+#include <signal.h> 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,74 +11,71 @@
 
 #include "util.h"
 
-pid_t pid;
-pthread_t tid[10];
+pthread_t tid[10]; // a set of threads
 pthread_attr_t attr;
-struct capList domain[2][10];  // domain[0]: AOS, domain[1]: CSE
-struct fileInfo fi[10];        // Maximum 10 file on server
+
+/*
+* domain[0]: Capability list for AOS group
+* domain[1]: Capability list for CSE group
+*/
+struct capList domain[2][10];  
+struct fileInfo fi[10];
+int fidx = 0;  // File index
+
 int count = 0;
 int aos_count = 0;
 int cse_count = 0;
-int fidx = 0;  // File index
 
-void showFileInfo() {
-    printf("********** Showing file info **************\n");
+void printFileInfo() {
+    if (fidx == 0) {
+        printf("There are no any file on the server.\n");
+        return;
+    }
+    printf("********** File Info **************\n");
     for (int i = 0; i < fidx; i++) {
         printf("File name: %s\n", fi[i].fname);
         printf("File owner: %s\n", fi[i].owner);
-
-        if (i != fidx - 1) {
-            printf("\n");
-        }
     }
-    printf("********************************************\n");
 }
-void showCapability() {
-    printf("********** Showing capability **************\n");
+
+void printCapability() {
+    printf("********** Capability List **************\n");
     printf("AOS: ");
     for (int i = 0; i < fidx; i++) {
-        printf("%s | %d | %d -> ", domain[0][i].fname, domain[0][i].read,
-               domain[0][i].write);
+        printf("[%s %d %d] -> ", domain[0][i].fname, domain[0][i].read, domain[0][i].write);
         if (i == fidx - 1) printf("NULL");
     }
     printf("\nCSE: ");
     for (int i = 0; i < fidx; i++) {
-        printf("%s | %d | %d -> ", domain[1][i].fname, domain[1][i].read,
-               domain[1][i].write);
+        printf("[%s %d %d] -> ", domain[1][i].fname, domain[1][i].read, domain[1][i].write);
         if (i == fidx - 1) printf("NULL");
     }
-    printf("\n********************************************\n");
+    printf("\n");
 }
-void handleCreate(int sockfd, char *name, int group, char *fname, char *arg) {
-    // printf("Name: %s\n", name);
-    // printf("Group ID: %d\n", group);
-    // printf("Filename: %s\n", fname);
-    // printf("Permission: %s\n", arg);
 
-    // Check file is exist or not
-    char recvbuf[1024];
+void doCreate(int sockfd, char *name, int group, char *fname, char *arg) {
+
     char sendbuf[1024];
     memset(sendbuf, 0, 1024);
-    memset(recvbuf, 0, 1024);
+
     for (int i = 0; i < fidx; i++) {
         if (strcmp(fname, fi[i].fname) == 0) {
             printf("%s\n", "The file is exist...");
             strcpy(sendbuf, "The file is exist...");
-            printf("Denied...\n");
             send(sockfd, sendbuf, strlen(sendbuf), 0);
             return;
         }
     }
-    printf("Accepted...\n");
-    // Store file information
+
+    printf("Creating the file...\n");
+
+    /* Store file information */
     strcpy(fi[fidx].fname, fname);
-    // printf("%d\n", strcmp(fi[fidx].fname, fname));
     strcpy(fi[fidx].owner, name);
     fi[fidx].rcount = 0;
     fi[fidx].wcount = 0;
 
-    // Handling capability list
-    // Same group with owner
+    /* Update capability(group) */
     strcpy(domain[group][fidx].fname, fname);
     if (arg[2] == 'r') {
         domain[group][fidx].read = 1;
@@ -95,7 +88,7 @@ void handleCreate(int sockfd, char *name, int group, char *fname, char *arg) {
         domain[group][fidx].write = 0;
     }
 
-    // Other group
+    /* Update capability(other group) */
     strcpy(domain[!group][fidx].fname, fname);
     if (arg[4] == 'r') {
         domain[!group][fidx].read = 1;
@@ -107,38 +100,45 @@ void handleCreate(int sockfd, char *name, int group, char *fname, char *arg) {
     } else {
         domain[!group][fidx].write = 0;
     }
+    
     fidx = fidx + 1;
-    showFileInfo();
+    printFileInfo();
     printf("\n");
-    showCapability();
+    printCapability();
 
-    FILE *fp;
-    fp = fopen(fname, "w");
+    /* Prepare the file content */
     char content[256];
     sprintf(content, "Created by %s\n", name);
-    // fwrite(content, 1, strlen(content), fp);
+
+    /* Create the file with the above content */
+    FILE *fp;
+    fp = fopen(fname, "w");
     fprintf(fp, "%s", content);
     fclose(fp);
+
+    /* Send the successful message to the client */
     printf("Create Finish...\n");
     strcpy(sendbuf, "Create Finish...");
     send(sockfd, sendbuf, strlen(sendbuf), 0);
     printf("Procedure of %s Finish...\n", name);
 }
-void handleRead(int sockfd, char *name, int group, char *fname) {
-    // printf("Name: %s\n", name);
-    // printf("Filename: %s\n", fname);
-    char recvbuf[1024];
+
+void doRead(int sockfd, char *name, int group, char *fname) {
+
     char sendbuf[1024];
     memset(sendbuf, 0, 1024);
-    memset(recvbuf, 0, 1024);
     strtok(fname, "\n");
+
     int i;
+    /* Find the file */
     for (i = 0; i < fidx; i++) {
         if (strcmp(fname, fi[i].fname) == 0) {
             printf("File is found...\n");
             break;
         }
     }
+
+    /* File is not found */
     if (i == fidx) {
         printf("File is not found...\n");
         printf("Denied...\n");
@@ -147,8 +147,11 @@ void handleRead(int sockfd, char *name, int group, char *fname) {
         send(sockfd, sendbuf, strlen(sendbuf), 0);
         return;
     }
+
+    /* Check read permission */
     if (strcmp(fi[i].owner, name) != 0) {
         printf("%s is not the owner...\n", name);
+        /* If you are not the onwer and not in the group, you can't read the file */
         if (domain[group][i].read != 1) {
             printf("%s has no permission to read\n", name);
             printf("Denied...\n");
@@ -162,6 +165,7 @@ void handleRead(int sockfd, char *name, int group, char *fname) {
         printf("%s is the owner...\n", name);
     }
 
+    /* When someone is writing the file, the file can't be read */
     if (fi[i].wcount != 0) {
         printf("Someone is reading...\n");
         strcpy(sendbuf, "Someone is writing...");
@@ -169,6 +173,7 @@ void handleRead(int sockfd, char *name, int group, char *fname) {
         send(sockfd, sendbuf, strlen(sendbuf), 0);
         return;
     }
+
     printf("Accepted...\n");
     strcpy(sendbuf, "You can read...");
     send(sockfd, sendbuf, strlen(sendbuf), 0);
@@ -180,6 +185,7 @@ void handleRead(int sockfd, char *name, int group, char *fname) {
     char data[1024];
     memset(data, 0, 1024);
 
+    /* Open the file and read it */
     fp = fopen(fname, "r");
     fread(data, 1, 1024, fp);
     fclose(fp);
@@ -191,22 +197,22 @@ void handleRead(int sockfd, char *name, int group, char *fname) {
     send(sockfd, sendbuf, strlen(sendbuf), 0);
     printf("Procedure of %s Finish...\n", name);
 }
-void handleWrite(int sockfd, char *name, int group, char *fname, char *arg) {
-    // printf("Name: %s\n", name);
-    // printf("Filename: %s\n", fname);
-    // printf("Write Type: %s\n", arg);
-    char recvbuf[1024];
+
+void doWrite(int sockfd, char *name, int group, char *fname, char *arg) {
+;
     char sendbuf[1024];
     memset(sendbuf, 0, 1024);
-    memset(recvbuf, 0, 1024);
+
     int i;
+    /* Find the file */
     for (i = 0; i < fidx; i++) {
         if (strcmp(fname, fi[i].fname) == 0) {
             printf("File is found...\n");
-
             break;
         }
     }
+
+    /* File is not found */
     if (i == fidx) {
         printf("File is not found...\n");
         printf("Denied...\n");
@@ -215,8 +221,11 @@ void handleWrite(int sockfd, char *name, int group, char *fname, char *arg) {
         send(sockfd, sendbuf, strlen(sendbuf), 0);
         return;
     }
+
+    /* Check write permission */
     if (strcmp(fi[i].owner, name) != 0) {
         printf("%s is not the owner...\n", name);
+        /* If you are not the onwer and not in the group, you can't write the file */
         if (domain[group][i].write != 1) {
             printf("%s has no permission to write\n", name);
             printf("Denied...\n");
@@ -230,6 +239,7 @@ void handleWrite(int sockfd, char *name, int group, char *fname, char *arg) {
         printf("%s is the owner...\n", name);
     }
 
+    /* When someone is reading the file, the file can't be write */
     if (fi[i].rcount != 0) {
         printf("Someone is reading...\n");
         printf("Denied...\n");
@@ -237,6 +247,8 @@ void handleWrite(int sockfd, char *name, int group, char *fname, char *arg) {
         send(sockfd, sendbuf, strlen(sendbuf), 0);
         return;
     }
+
+    /* When someone is writing the file, the file can't be write */
     if (fi[i].wcount != 0) {
         printf("Someone is writing...\n");
         printf("Denied...\n");
@@ -253,6 +265,7 @@ void handleWrite(int sockfd, char *name, int group, char *fname, char *arg) {
     memset(data, 0, 1024);
     recv(sockfd, data, 1024, 0);
 
+    /* Start to write the file (append or overwrite) */
     FILE *fp;
     if (arg[0] == 'a') {
         printf("Writing to %s (appending): %s", fname, data);
@@ -271,19 +284,21 @@ void handleWrite(int sockfd, char *name, int group, char *fname, char *arg) {
     fi[i].wcount--;
     printf("Procedure of %s Finish...\n", name);
 }
-void handleChangemode(int sockfd, char *name, int group, char *fname,
-                      char *arg) {
-    char recvbuf[1024];
+
+void doChangemode(int sockfd, char *name, int group, char *fname, char *arg) {
+
     char sendbuf[1024];
     memset(sendbuf, 0, 1024);
-    memset(recvbuf, 0, 1024);
+
     int i;
+    /* Find the file */
     for (i = 0; i < fidx; i++) {
         if (strcmp(fi[i].fname, fname) == 0) {
             break;
         }
     }
 
+    /* File is not found */
     if (i == fidx) {
         printf("Flie is not found\n");
         strcpy(sendbuf, "File is not found...");
@@ -293,6 +308,7 @@ void handleChangemode(int sockfd, char *name, int group, char *fname,
         return;
     }
 
+    /* Check the user is the owner or not */
     if (strcmp(fi[i].owner, name) != 0) {
         printf("%s is not the owner\n", name);
         strcpy(sendbuf, "You are not the owner...");
@@ -304,8 +320,8 @@ void handleChangemode(int sockfd, char *name, int group, char *fname,
         printf("%s is the owner\n", name);
     }
     printf("Accepted...\n");
-    // Handling capability list
-    // Same group with owner
+
+    /* Update capability(group) */
     if (arg[2] == 'r') {
         domain[group][i].read = 1;
     } else {
@@ -317,7 +333,7 @@ void handleChangemode(int sockfd, char *name, int group, char *fname,
         domain[group][i].write = 0;
     }
 
-    // Other group
+    /* Update capability(other group) */
     if (arg[4] == 'r') {
         domain[!group][i].read = 1;
     } else {
@@ -328,7 +344,8 @@ void handleChangemode(int sockfd, char *name, int group, char *fname,
     } else {
         domain[!group][i].write = 0;
     }
-    showCapability();
+
+    printCapability();
     printf("Changemode Finish...\n");
     strcpy(sendbuf, "Changemode Finish...");
     send(sockfd, sendbuf, strlen(sendbuf), 0);
@@ -369,8 +386,7 @@ void run(void *arg) {
             return;
         }
         printf("\n%s: %s", name, recvbuf);
-        // printf("%s: ", name);
-        // puts(recvbuf);
+
         // Operation
         char *token = strtok(recvbuf, " ");
         strcpy(oper, token);
@@ -384,21 +400,15 @@ void run(void *arg) {
             strcpy(arg, token);
         }
 
-        // printf("Operation: %s\n", oper);
-        // printf("Filename: %s\n", f);
-        // if (strcmp(oper, "read") != 0)
-        //     printf("Permission: %s\n", permit);
         if (strcmp(oper, "create") == 0) {
-            handleCreate(sockfd, name, group, f, arg);
+            doCreate(sockfd, name, group, f, arg);
         } else if (strcmp(oper, "read") == 0) {
-            handleRead(sockfd, name, group, f);
+            doRead(sockfd, name, group, f);
         } else if (strcmp(oper, "write") == 0) {
-            handleWrite(sockfd, name, group, f, arg);
+            doWrite(sockfd, name, group, f, arg);
         } else if (strcmp(oper, "changemode") == 0) {
-            handleChangemode(sockfd, name, group, f, arg);
+            doChangemode(sockfd, name, group, f, arg);
         }
-        // strcpy(sendbuf, "Parsing Finish...");
-        // send(newSocket, sendbuf, strlen(sendbuf), 0);
     }
 }
 
