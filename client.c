@@ -1,8 +1,3 @@
-// ******************************************************************
-// Socket template code source:
-// https://www.programminglogic.com/sockets-programming-example-in-c-server-converts-strings-to-uppercase/
-// *******************************************************************
-
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -43,7 +38,7 @@ int main(void) {
         memset(recvbuf, 0, 1024);
         printf("Input command:\n");
         char temp[1024];
-        char ttemp[3][50];
+        char sep_cmd[3][50];
         fgets(sendbuf, 1024, stdin);
         if (strcmp(sendbuf, "exit\n") == 0) {
             send(clientSocket, sendbuf, strlen(sendbuf), 0);
@@ -54,44 +49,46 @@ int main(void) {
         char *token = strtok(temp, " ");
         int count = 0;
         while (token != NULL) {
-            strcpy(ttemp[count], token);
+            strcpy(sep_cmd[count], token);
             token = strtok(NULL, " ");
             count++;
         }
-        if (strcmp(ttemp[0], "create") == 0 || strcmp(ttemp[0], "read") == 0 ||
-            strcmp(ttemp[0], "write") == 0 ||
-            strcmp(ttemp[0], "changemode") == 0 ||
-            strcmp(ttemp[0], "exit") == 0) {
-            if (strcmp(ttemp[0], "read") == 0 && count != 2) {
+
+        /* Check if the operation is valid or not */
+        if (strcmp(sep_cmd[0], "create") == 0 || strcmp(sep_cmd[0], "read") == 0 ||
+            strcmp(sep_cmd[0], "write") == 0 ||
+            strcmp(sep_cmd[0], "changemode") == 0 ||
+            strcmp(sep_cmd[0], "exit") == 0) {
+            if (strcmp(sep_cmd[0], "read") == 0 && count != 2) {
                 printUsage();
                 continue;
-            } else if (strcmp(ttemp[0], "create") == 0 ||
-                       strcmp(ttemp[0], "changemode") == 0) {
+            } else if (strcmp(sep_cmd[0], "create") == 0 || strcmp(sep_cmd[0], "changemode") == 0) {
                 if (count != 3) {
                     printUsage();
                     continue;
                 }
-                if (strlen(ttemp[2]) != 7) {
+                if (strlen(sep_cmd[2]) != 7) {
                     printUsage();
                     continue;
                 }
-                if (ttemp[2][0] != 'r') {
+                if (sep_cmd[2][0] != 'r') {
                     printUsage();
                     continue;
                 }
-                if (ttemp[2][1] != 'w') {
+                if (sep_cmd[2][1] != 'w') {
                     printUsage();
                     continue;
                 }
+                /* Check permission is valid or not */
                 int flag = 0;
                 for (int i = 2; i < 6; i++) {
                     if (i % 2 == 0) {
-                        if (ttemp[2][i] != 'r' && ttemp[2][i] != '-') {
+                        if (sep_cmd[2][i] != 'r' && sep_cmd[2][i] != '-') {
                             flag = 1;
                             break;
                         }
                     } else {
-                        if (ttemp[2][i] != 'w' && ttemp[2][i] != '-') {
+                        if (sep_cmd[2][i] != 'w' && sep_cmd[2][i] != '-') {
                             flag = 1;
                             break;
                         }
@@ -101,29 +98,29 @@ int main(void) {
                     printUsage();
                     continue;
                 }
-            } else if (strcmp(ttemp[0], "write") == 0) {
+            } else if (strcmp(sep_cmd[0], "write") == 0) {
                 if (count != 3) {
                     printUsage();
                     continue;
                 }
-                if (strlen(ttemp[2]) != 2) {
+                if (strlen(sep_cmd[2]) != 2) {
                     printUsage();
                     continue;
                 }
-                if (ttemp[2][0] != 'o' && ttemp[2][0] != 'a') {
+                if (sep_cmd[2][0] != 'o' && sep_cmd[2][0] != 'a') {
                     printUsage();
                     continue;
                 }
             }
-            if (strcmp(ttemp[0], "write") == 0) {
+
+            /* Handle write operation */
+            if (strcmp(sep_cmd[0], "write") == 0) {
                 send(clientSocket, sendbuf, strlen(sendbuf), 0);
                 recv(clientSocket, recvbuf, 1024, 0);
-                // printf("%d", strcmp(recvbuf, "permit"));
                 if (strcmp(recvbuf, "Someone is writing...") == 0 ||
                     strcmp(recvbuf, "Someone is reading...") == 0 ||
                     strcmp(recvbuf, "File is not found...") == 0 ||
-                    strcmp(recvbuf, "You have no permission to write...") ==
-                        0) {
+                    strcmp(recvbuf, "You have no permission to write...") == 0) {
                     printf("Received from server: %s\n\n", recvbuf);
                     continue;
                 } else {
@@ -137,8 +134,9 @@ int main(void) {
                     recv(clientSocket, recvbuf, 1024, 0);
                     printf("Received from server: %s\n\n", recvbuf);
                 }
-
-            } else if (strcmp(ttemp[0], "read") == 0) {
+            } 
+            /* Handle read operation */
+            else if (strcmp(sep_cmd[0], "read") == 0) {
                 send(clientSocket, sendbuf, strlen(sendbuf), 0);
                 recv(clientSocket, recvbuf, 1024, 0);
                 if (strcmp(recvbuf, "Someone is writing...") == 0 ||
@@ -156,19 +154,17 @@ int main(void) {
                     printf("*****************************\n");
                     printf("%s", data);
                     FILE *fp;
-                    strtok(ttemp[1], "\n");
-                    fp = fopen(ttemp[1], "w");
-                    // fwrite(data, 1, strlen(data), fp);
+                    strtok(sep_cmd[1], "\n");
+                    fp = fopen(sep_cmd[1], "w");
                     printf("******************************\n");
+
                     fprintf(fp, "%s", data);
                     fclose(fp);
                     recv(clientSocket, recvbuf, 1024, 0);
                     printf("Received from server: %s\n\n", recvbuf);
                 }
-
             } else {
                 send(clientSocket, sendbuf, strlen(sendbuf), 0);
-
                 recv(clientSocket, recvbuf, 1024, 0);
                 printf("Received from server: %s\n\n", recvbuf);
             }

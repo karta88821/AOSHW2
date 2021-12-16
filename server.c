@@ -58,6 +58,7 @@ void doCreate(int sockfd, char *name, int group, char *fname, char *arg) {
     char sendbuf[1024];
     memset(sendbuf, 0, 1024);
 
+    /* Check file is existed or nots */
     for (int i = 0; i < fidx; i++) {
         if (strcmp(fname, fi[i].fname) == 0) {
             printf("%s\n", "The file is exist...");
@@ -141,8 +142,6 @@ void doRead(int sockfd, char *name, int group, char *fname) {
     /* File is not found */
     if (i == fidx) {
         printf("File is not found...\n");
-        printf("Denied...\n");
-
         strcpy(sendbuf, "File is not found...");
         send(sockfd, sendbuf, strlen(sendbuf), 0);
         return;
@@ -154,7 +153,6 @@ void doRead(int sockfd, char *name, int group, char *fname) {
         /* If you are not the onwer and not in the group, you can't read the file */
         if (domain[group][i].read != 1) {
             printf("%s has no permission to read\n", name);
-            printf("Denied...\n");
             strcpy(sendbuf, "You have no permission to read...");
             send(sockfd, sendbuf, strlen(sendbuf), 0);
             return;
@@ -169,7 +167,6 @@ void doRead(int sockfd, char *name, int group, char *fname) {
     if (fi[i].wcount != 0) {
         printf("Someone is reading...\n");
         strcpy(sendbuf, "Someone is writing...");
-        printf("Denied...\n");
         send(sockfd, sendbuf, strlen(sendbuf), 0);
         return;
     }
@@ -215,8 +212,6 @@ void doWrite(int sockfd, char *name, int group, char *fname, char *arg) {
     /* File is not found */
     if (i == fidx) {
         printf("File is not found...\n");
-        printf("Denied...\n");
-
         strcpy(sendbuf, "File is not found...");
         send(sockfd, sendbuf, strlen(sendbuf), 0);
         return;
@@ -228,7 +223,6 @@ void doWrite(int sockfd, char *name, int group, char *fname, char *arg) {
         /* If you are not the onwer and not in the group, you can't write the file */
         if (domain[group][i].write != 1) {
             printf("%s has no permission to write\n", name);
-            printf("Denied...\n");
             strcpy(sendbuf, "You have no permission to write...");
             send(sockfd, sendbuf, strlen(sendbuf), 0);
             return;
@@ -242,7 +236,6 @@ void doWrite(int sockfd, char *name, int group, char *fname, char *arg) {
     /* When someone is reading the file, the file can't be write */
     if (fi[i].rcount != 0) {
         printf("Someone is reading...\n");
-        printf("Denied...\n");
         strcpy(sendbuf, "Someone is reading...");
         send(sockfd, sendbuf, strlen(sendbuf), 0);
         return;
@@ -251,7 +244,6 @@ void doWrite(int sockfd, char *name, int group, char *fname, char *arg) {
     /* When someone is writing the file, the file can't be write */
     if (fi[i].wcount != 0) {
         printf("Someone is writing...\n");
-        printf("Denied...\n");
         strcpy(sendbuf, "Someone is writing...");
         send(sockfd, sendbuf, strlen(sendbuf), 0);
         return;
@@ -303,8 +295,6 @@ void doChangemode(int sockfd, char *name, int group, char *fname, char *arg) {
         printf("Flie is not found\n");
         strcpy(sendbuf, "File is not found...");
         send(sockfd, sendbuf, strlen(sendbuf), 0);
-        printf("Denied...\n");
-
         return;
     }
 
@@ -313,8 +303,6 @@ void doChangemode(int sockfd, char *name, int group, char *fname, char *arg) {
         printf("%s is not the owner\n", name);
         strcpy(sendbuf, "You are not the owner...");
         send(sockfd, sendbuf, strlen(sendbuf), 0);
-        printf("Denied...\n");
-
         return;
     } else {
         printf("%s is the owner\n", name);
@@ -430,7 +418,7 @@ int main() {
     socklen_t addr_size;
     int i;
 
-    welcomeSocket = socket(PF_INET, SOCK_STREAM, 0);
+    welcomeSocket = socket(AF_INET, SOCK_STREAM, 0);
 
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(portNum);
@@ -465,8 +453,7 @@ int main() {
 
         for (int i = 0; i < 10; i++) {
             if (tid[i] == 0 || thread_check(tid[i]) == 0) {
-                if (pthread_create(&tid[i], &attr, (void *(*)(void *))run,
-                                   &newSocket) < 0)
+                if (pthread_create(&tid[i], &attr, (void *(*)(void *))run, &newSocket) < 0)
                     printf("pthread_create_error");
                 break;
             }
