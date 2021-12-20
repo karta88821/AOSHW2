@@ -9,7 +9,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "util.h"
+#include "common.h"
 
 pthread_t tid[10]; // a set of threads
 pthread_attr_t attr;

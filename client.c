@@ -4,7 +4,7 @@
 #include <string.h>
 #include <sys/socket.h>
 
-#include "util.h"
+#include "common.h"
 
 void printUsage() {
     printf("1) create filename permision (Ex: rwr---)\n");
